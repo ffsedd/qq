@@ -316,6 +316,7 @@ def parse_file_arguments(p=None):
 
 # ----------------  FILES -------------------------------
 def to_trash(fp):
+    import send2trash
     o = send2trash.send2trash(str(fp))
     if o:
         logging.info(o)
