@@ -1,1 +1,1 @@
-from qq import *
+from qq.qq import *
