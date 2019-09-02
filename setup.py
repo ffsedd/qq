@@ -10,5 +10,6 @@ setup(
     author_email='ffsedd@gmail.com',
     description='python tools library',
     package = find_packages(),
+    scripts=['qq'],
     install_requires=['send2trash', 'pillow'],
 )
