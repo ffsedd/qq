@@ -9,7 +9,7 @@ setup(
     author='ffsedd',
     author_email='ffsedd@gmail.com',
     description='python tools library',
-    package_dir = {'': 'lib'}
+    package_dir = {'': 'lib'},
     #packages=find_packages(),    
     install_requires=['send2trash', 'pillow'],
 )
