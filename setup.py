@@ -5,10 +5,11 @@ from setuptools import setup, find_packages
 setup(
     name='qq',
     version='1.0.0',
-    url='https://github.com/ffsedd/qq',
+    url='https://github.com/ffsedd/qq/',
     author='ffsedd',
     author_email='ffsedd@gmail.com',
     description='python tools library',
-    packages=find_packages(),    
+    package = find_packages(),
+    scripts=['qq'],
     install_requires=['send2trash', 'pillow'],
 )
