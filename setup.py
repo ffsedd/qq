@@ -2,6 +2,9 @@
 
 from setuptools import setup, find_packages
 import os
+import sys
+
+_here = os.path.abspath(os.path.dirname(__file__))
 
 
 
@@ -18,6 +21,7 @@ setup(
     author_email='ffsedd@gmail.com',
     description='python tools library',
     packages=['qq'],
-    scripts=['qq'],
+    #scripts=['qq'],
     install_requires=['send2trash', 'pillow'],
+    include_package_data=True,
 )
