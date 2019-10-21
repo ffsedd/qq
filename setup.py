@@ -9,7 +9,7 @@ _here = os.path.abspath(os.path.dirname(__file__))
 
 
 version = {}
-with open(os.path.join(_here, 'somepackage', 'version.py')) as f:
+with open(os.path.join(_here, 'qq', 'version.py')) as f:
     exec(f.read(), version)
     
     
