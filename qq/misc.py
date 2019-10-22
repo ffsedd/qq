@@ -2,24 +2,18 @@
 
 import os
 import sys
-import shutil
 import subprocess
 import re
 import datetime
-import time
 import logging
 from pathlib import Path
 
-from PIL import Image
 # ignore numpy warnings
 import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 
-JPEGTRAN_EXE = 'jpegtran-droppatch'  # http://jpegclub.org/jpegtran/
-MAGICK_EXE = 'convert'
-EXIFTOOL_EXE = 'exiftool'
 
 # logging.basicConfig(level=logging.DEBUG)
 
@@ -38,265 +32,6 @@ SC_DIR, SC_NAME = os.path.split(os.path.realpath(__file__))
 # pdb.post_mortem(tb)
 # sys.excepthook = excepthook
 
-
-def debug_it(func):
-    """
-    Function to print all args of decorated function
-     - decorate suspicious function with @debug_it
-   """
-
-    def wrapper(*func_args, **func_kwargs):
-        ''' '''
-#        arg_names = func.__code__.co_varnames[:func.__code__.co_argcount]
-#        arg_names = func.__code__.co_varnames
-#        args = func_args[:len(arg_names)]
-#        args = func_args
-#        defaults = func.__defaults__ or ()
-#        args = args + defaults[len(defaults) -\
-#        (func.__code__.co_argcount - len(args)):] # tuple of args values
-#        params = dict(zip(arg_names, args))
-        params = dict(zip(func.__code__.co_varnames, func_args))
-        logging.debug(f"CALL: {func.__name__ } {params}")
-        return func(*func_args, **func_kwargs)
-    return wrapper
-
-
-def sleep(seconds):
-    time.sleep(seconds)
-
-
-class Script():
-
-    def __init__(self, quiet=True, verbose=False, loglevel=20, filepath=None,
-                 format='!%(levelno)s [%(module)10s%(lineno)4d]\t%(message)s'):
-        import logging
-        self.start_time = time.time()
-        self.args = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else ""
-        print(60 * "=" + f"\n {sys.argv[0]} started        \n" + 60 * "=")
-        if not quiet:
-            print(f" \t args: \t {self.args}")
-
-        if filepath:
-            print(f"logging to {filepath}")
-            logging.basicConfig(level=loglevel,
-                                format=format,
-                                filename=filepath, filemode='w')
-        else:
-            logging.basicConfig(level=loglevel,
-                                format=format)
-
-    def end(self):
-        runtime = round(time.time() - self.start_time, 2)
-        print(
-            "\n",
-            60 *
-            "-",
-            f"\n script finished in {runtime} s : \t {sys.argv[0]} \n ",
-            60 *
-            "-")
-
-
-class File(type(Path())):
-    import pathlib
-
-    _flavour = pathlib._windows_flavour \
-        if os.name == 'nt' else pathlib._posix_flavour
-
-    def __new__(cls, *args):
-        return super(File, cls).__new__(cls, *args)
-
-    def __init__(self, *args):
-        super().__init__()  # Path.__init__ takes no arg (it does new())
-        if not self.is_file():
-            raise Exception(f"Error, file not found: {self}")
-        self.path = str(self.resolve())
-
-    def with_tail(self, tail):
-        return Path(self.parent) / (self.stem + tail + self.suffix)
-
-    def lower_ext(self):
-        self.rename(self.with_suffix(self.suffix.lower()))
-
-
-class ImageFile(File):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def size(self):
-        return Image.open(self).size
-
-    def format(self):
-        return Image.open(self).format
-
-    @debug_it
-    def to_jpg(self, out_fp=None, trash=False, quality=85):
-        logging.info(f"to_jpg {self}...")
-        if self.format() == "JPEG":
-            logging.info(f"... already in JPG format: {self.name} ")
-            return
-        if not out_fp:
-            out_fp = self.with_suffix(".jpg")
-        else:
-            out_fp = Path(out_fp)
-        Image.open(self).convert('RGB').save(out_fp, quality=quality)
-        logging.info(f"...done: {self.name} ")
-
-        if trash:
-            to_trash(self)
-
-    @debug_it
-    def to_png(self, out_fp=None, trash=False):
-        logging.info(f"to_png {self}...")
-        if self.format() == "PNG":
-            logging.info(f"...already in PNG format: {self.name} ")
-            return
-        if not out_fp:
-            out_fp = self.with_suffix(".png")
-        else:
-            out_fp = Path(out_fp)
-        Image.open(self).save(out_fp)
-        logging.info(f"...done: {self.name} ")
-        if trash:
-            to_trash(self)
-
-    def to_png16(self, out_fp=None, trash=False):
-        #        import numpy as np
-        from numpngw import write_png
-        import skimage.io
-        if not out_fp:
-            out_fp = self.with_suffix(".png")
-        img = skimage.io.imread(self, plugin='tifffile')
-        write_png(out_fp, img)
-
-    def read_iptc_caption(self):
-        cmd = f"{EXIFTOOL_EXE} -s3  -iptc:caption-abstract '{self}' "
-        try:
-            p = subprocess.check_output(cmd, shell=True)
-            self.iptc_caption = p.decode().strip()
-        except Exception as e:
-            logging.warn(f"exiftool error {cmd} {e}")
-            return ""
-        return self.iptc_caption
-
-    def write_xmp_description(self, description):
-        cmd = f"{EXIFTOOL_EXE} '{self}' -overwrite_original \
-        -preserve -XMP-dc:Description='{description}' "
-        r = run(cmd, shell=True)
-        return r
-
-    def write_iptc_keyword(self, tag):
-        # append tag
-        tag = tag.replace(" ", "_")
-        cmd = f"{EXIFTOOL_EXE} '{self}' -overwrite_original \
-        -preserve -iptc:keywords-={tag} -iptc:keywords+={tag} "
-        r = run(cmd, shell=True)
-        return r
-
-    def rename_by_caption(self):
-        try:
-            cap = self.read_iptc_caption()
-            if cap == "":
-                return 0, "", None
-            outfp = self.with_name(f"{cap}_#_{self.name}")
-            self.rename(outfp)
-            return 0, str(outfp), None  # rc, out, err
-
-        except Exception as e:
-            logging.critical("failed with exception: {}".format(e))
-            return 1, str(self), e
-
-    @debug_it
-    def update_exif_thumb(self, size=128):
-        # create thumbnail
-        temp_fp = Path(make_temp_dir()) / \
-            self.with_name(self.stem + '-thumb' + self.suffix)
-        cmd = f'{MAGICK_EXE} "{self}" -quality 70 \
-        -thumbnail {size}x{size} "{temp_fp}" '
-        o = run(cmd, shell=True, verbose=False)
-        if not temp_fp.is_file():
-            logging.critical(
-                "thumbnail not created, exit, code: {} \n {}".format(o, cmd))
-            return 1, cmd, o
-        # insert thumbnail
-        cmd = f'{EXIFTOOL_EXE} -overwrite_original_in_place \
-        "-thumbnailimage<={temp_fp}" "{self}" '
-        o = run(cmd, shell=True)
-        # remove temp file
-        try:
-            temp_fp.unlink()
-        except Exception as e:
-            logging.warning(e)
-        return 0, o, None
-
-    @debug_it
-    def sharpen(self, out_fp=None, radius=2.0,
-                sigma=1.4, percent=120, threshold=3):
-        logging.info(f"sharpen {self}...")
-        if not out_fp:
-            out_fp = self.with_name(self.stem + "_sharp" + self.suffix)
-        unsharp = f"{radius:.1f}x{sigma:.1f}+\
-        {percent/100:.2f}+{threshold/100:.2f}"
-#        print ("unsharp mask:", unsharp)
-        cmd = f"{MAGICK_EXE} -unsharp {unsharp} {self} {out_fp}"
-        r = run(cmd, shell=True)
-        out_image = ImageFile(out_fp)
-        # write unsharp mask settings to XMP description
-        out_image.write_xmp_description("USM_" + unsharp)
-        out_image.write_iptc_keyword("sharp")    # add tag
-        logging.info("...done: {self.name} ")
-        return r
-
-    @debug_it
-    def crop(self, geometry, out_fp):
-        opt = r' -copy all -perfect -crop {0} "{1}" "{2}" '.format(
-            geometry, self, out_fp)
-    #    verbose = " -verbose"
-        cmd = JPEGTRAN_EXE + opt  # + verbose
-        p = subprocess.run(cmd, shell=True)
-        return p
-
-    @debug_it
-    def rotate(self, angle):
-        assert(angle % 90 == 0)
-        logging.info(f"rotate  {self}...")
-#        perfect = "-perfect"
-        if self.format() == "JPEG":
-            assert(angle in [90, 180, 270])
-            perfect = ""
-            cmd = f'{JPEGTRAN_EXE} -copy all {perfect} \
-            -rotate {angle} -outfile "{self}" "{self}" '
-            run(cmd, shell=True)
-        else:
-            Image.open(self).rotate(-angle).save(self)  # counterclockwise
-        logging.info(f"...rotated: {self.name}")
-
-    def get_exif(self):
-        with Image.open(self) as img:
-            img.verify()
-            exif = img._getexif()
-        return exif
-
-    @debug_it
-    def resize(self, width, trash=False, quality=80):
-        logging.info(f"resize {self}...")
-        bak_fp = self.with_suffix(f"{self.suffix}0")
-        self.rename(bak_fp)
-        with Image.open(bak_fp) as img:
-            if img.size[0] > width or img.size[1] > width:
-                img.thumbnail((width, width))
-                img.save(self, quality=quality)
-                logging.info(f"...done: {self.name} ")
-                if trash:
-                    to_trash(bak_fp)
-            else:
-                logging.info(f"...image smaller than {width} px: {self.name} ")
-                bak_fp.rename(self)
-
-        return
-
-    def to_trash(self):
-        to_trash(self)
 
 # ---------------- GET ARGUMENTS -------------------------------
 
@@ -372,47 +107,6 @@ def parse_file_arguments(p=None):
     return ARG
 
 # ----------------  FILES -------------------------------
-
-
-def to_trash(fp):
-    import send2trash
-    o = send2trash.send2trash(str(fp))
-    if o:
-        logging.info(o)
-    else:
-        logging.info(f'trashed... {fp}')
-
-
-def safe_move(src, dst):
-    # MOVE DIR
-    src = str(src)
-    dst = str(dst)
-    if os.path.isdir(src) and not os.path.isfile(dst):
-        logging.info(f"SAFE MOVE DIR {src}")
-        for src_dir, dirs, files in os.walk(src):
-            dst_dir = src_dir.replace(src, dst, 1)
-            if not os.path.exists(dst_dir):
-                os.makedirs(dst_dir)
-            for file_ in files:
-                src_file = os.path.join(src_dir, file_)
-                dst_file = os.path.join(dst_dir, file_)
-                if os.path.exists(dst_file):
-                    to_trash(dst_file)
-                    logging.info(f"\t {dst_file} trashed")
-                shutil.move(src_file, dst_dir)
-                logging.info(f"{src_file} moved")
-        if not os.listdir(src):
-            os.rmdir(src)
-            logging.info(f"{src} deleted")
-    # MOVE FILE
-    if os.path.isfile(src):
-        logging.info(f"SAFE MOVE FILE {src}")
-        if os.path.isfile(dst):
-            to_trash(dst)
-            shutil.move(src, dst)
-        elif os.path.isdir(dst):
-            shutil.move(src, dst)
-    return
 
 
 def fps(indir=".", recursive=True, pattern="*", extensions=None, match=None):
@@ -605,14 +299,6 @@ def datestring():
     return datetime.datetime.now().strftime("%-d.%-m.%Y")
 
 # ---------------- MISC -------------------------------
-
-
-def make_temp_dir(name="pytemp"):
-    """ make temp dir in /tmp folder, return Path """
-    import tempfile
-    dp = Path(tempfile.gettempdir(), name)
-    dp.mkdir(parents=True, exist_ok=True)
-    return dp
 
 
 def beep(freq=440, duration=.5, volume=.1):
@@ -834,45 +520,6 @@ def public_dir(obj):
     return [a for a in dir(obj) if not a.startswith('_')]
 
 
-def zipfiles(filelist, zip_fp):
-    from zipfile import ZipFile, ZIP_DEFLATED
-    with ZipFile(zip_fp, 'w', ZIP_DEFLATED) as z:
-        for fp in filelist:
-            z.write(fp)
-
-
-def rcopy(src, dest, ignore=None, overwrite=False):
-    ''' recursivelly copy files '''
-    src, dest = Path(src), Path(dest)
-    ignore = ignore or []
-
-    if src.is_dir() and str(src) not in ignore:
-        dest.mkdir(exist_ok=True)
-        for f in src.iterdir():
-            rcopy(f, dest / f.name, ignore, overwrite=overwrite)
-
-    elif src.is_file() and str(src) not in ignore:
-        if overwrite or not dest.exists():
-            shutil.copyfile(src, dest)
-
-
-def copy3(src, dst, overwrite=True, trash_src=False):
-    ''' copy or move file, send deleted to trash '''
-    from shutil import copy2
-    src, dst = Path(src), Path(dst)
-    print(f"copy3 {src} -> {dst}")
-    if dst.is_file():
-        if overwrite:   # overwrite if exists
-            print("file exists, overwriting")
-            to_trash(dst)
-        else:
-            print("copy failed, dst file exists...")
-            return 1
-    copy2(src, dst)
-    if trash_src:
-        to_trash(src)
-
-
 def get_infiles(files=[], dirs=[], recursive=False, extensions=[], substr=""):
     """
     return list of filepaths from list of files and dirs
@@ -1040,61 +687,6 @@ def lowerext(f):
     # convert file extension to lowercase
     return os.path.splitext(f)[0] + os.path.splitext(f)[-1].lower()
 
-
-def save_config(cfg_dict, fp):
-    import json
-    # save config to unicode json file
-    import io
-    with io.open(fp, 'w', encoding='utf8') as f:
-        json.dump(cfg_dict, f, indent=4, sort_keys=True, ensure_ascii=False)
-
-
-def load_config(fp, default_cfg=None):
-    import json
-    try:
-        with open(fp) as f:
-            return json.load(f)
-    except Exception as e:
-        print(e)
-        save_config(default_cfg, fp)
-        return default_cfg
-
-
-class Config(dict):
-    ''' load config from json file or use default value '''
-
-    def __init__(self, default={}, fpath=None):
-        ''' create config, pass defalut value or filepath to load '''
-        super(Config, self).__init__(default)
-        self.fpath = fpath
-        if fpath:
-            self.load()
-
-    def load(self, fpath=None):
-        ''' load config dict from json file '''
-        import json
-        if fpath:
-            self.fpath = fpath
-        try:
-            with open(self.fpath) as f:
-                cfg = json.load(f)
-                super(Config, self).__init__(cfg)
-                logging.debug(f"{self.fpath} json config loaded {self}")
-        except Exception as e:
-            print(e)
-            self.save()  # if load failed, create new config file
-
-    def save(self, fpath=None):
-        ''' save config dict to json file '''
-        import io
-        import json
-        # save config to unicode json file
-        if fpath:
-            self.fpath = fpath
-
-        with io.open(self.fpath, 'w', encoding='utf8') as f:
-            json.dump(self, f, indent=4, sort_keys=True, ensure_ascii=False)
-        logging.debug(f"{self.fpath} json config saved {self}")
 
 # ---------------- MAIN -------------------------------
 

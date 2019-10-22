@@ -9,8 +9,15 @@ from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
 from skimage import img_as_float, img_as_ubyte, img_as_uint
 from imageio import imread, imwrite
 from qq.nptools import normalize, info
+from qq.ostools import to_trash
+from qq.fileobj import File
+from PIL import Image
+from subprocess import run, check_output
 
 FILETYPES = ['jpeg', 'bmp', 'png', 'tiff']
+JPEGTRAN_EXE = 'jpegtran-droppatch'  # http://jpegclub.org/jpegtran/
+MAGICK_EXE = 'convert'
+EXIFTOOL_EXE = 'exiftool'
 
 
 class npImage():
@@ -213,7 +220,183 @@ class npImage():
             raise Exception(f"unsupported array type: {arr.dtype}")
 
 
+class ImageFile(File):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def size(self):
+        return Image.open(self).size
+
+    def format(self):
+        return Image.open(self).format
+
+    def to_jpg(self, out_fp=None, trash=False, quality=85):
+        logging.info(f"to_jpg {self}...")
+        if self.format() == "JPEG":
+            logging.info(f"... already in JPG format: {self.name} ")
+            return
+        if not out_fp:
+            out_fp = self.with_suffix(".jpg")
+        else:
+            out_fp = Path(out_fp)
+        Image.open(self).convert('RGB').save(out_fp, quality=quality)
+        logging.info(f"...done: {self.name} ")
+
+        if trash:
+            to_trash(self)
+
+    def to_png(self, out_fp=None, trash=False):
+        logging.info(f"to_png {self}...")
+        if self.format() == "PNG":
+            logging.info(f"...already in PNG format: {self.name} ")
+            return
+        if not out_fp:
+            out_fp = self.with_suffix(".png")
+        else:
+            out_fp = Path(out_fp)
+        Image.open(self).save(out_fp)
+        logging.info(f"...done: {self.name} ")
+        if trash:
+            to_trash(self)
+
+    def to_png16(self, out_fp=None, trash=False):
+        #        import numpy as np
+        from numpngw import write_png
+        import skimage.io
+        if not out_fp:
+            out_fp = self.with_suffix(".png")
+        img = skimage.io.imread(self, plugin='tifffile')
+        write_png(out_fp, img)
+
+    def read_iptc_caption(self):
+        cmd = f"{EXIFTOOL_EXE} -s3  -iptc:caption-abstract '{self}' "
+        try:
+            p = check_output(cmd, shell=True)
+            self.iptc_caption = p.decode().strip()
+        except Exception as e:
+            logging.warn(f"exiftool error {cmd} {e}")
+            return ""
+        return self.iptc_caption
+
+    def write_xmp_description(self, description):
+        cmd = f"{EXIFTOOL_EXE} '{self}' -overwrite_original \
+        -preserve -XMP-dc:Description='{description}' "
+        r = run(cmd, shell=True)
+        return r
+
+    def write_iptc_keyword(self, tag):
+        # append tag
+        tag = tag.replace(" ", "_")
+        cmd = f"{EXIFTOOL_EXE} '{self}' -overwrite_original \
+        -preserve -iptc:keywords-={tag} -iptc:keywords+={tag} "
+        r = run(cmd, shell=True)
+        return r
+
+    def rename_by_caption(self):
+        try:
+            cap = self.read_iptc_caption()
+            if cap == "":
+                return 0, "", None
+            outfp = self.with_name(f"{cap}_#_{self.name}")
+            self.rename(outfp)
+            return 0, str(outfp), None  # rc, out, err
+
+        except Exception as e:
+            logging.critical("failed with exception: {}".format(e))
+            return 1, str(self), e
+
+    def update_exif_thumb(self, size=128):
+        from qq.ostools import make_temp_dir
+        # create thumbnail
+        temp_fp = Path(make_temp_dir()) / \
+            self.with_name(self.stem + '-thumb' + self.suffix)
+        cmd = f'{MAGICK_EXE} "{self}" -quality 70 \
+        -thumbnail {size}x{size} "{temp_fp}" '
+        o = run(cmd, shell=True, verbose=False)
+        if not temp_fp.is_file():
+            logging.critical(
+                "thumbnail not created, exit, code: {} \n {}".format(o, cmd))
+            return 1, cmd, o
+        # insert thumbnail
+        cmd = f'{EXIFTOOL_EXE} -overwrite_original_in_place \
+        "-thumbnailimage<={temp_fp}" "{self}" '
+        o = run(cmd, shell=True)
+        # remove temp file
+        try:
+            temp_fp.unlink()
+        except Exception as e:
+            logging.warning(e)
+        return 0, o, None
+
+    def sharpen(self, out_fp=None, radius=2.0,
+                sigma=1.4, percent=120, threshold=3):
+        logging.info(f"sharpen {self}...")
+        if not out_fp:
+            out_fp = self.with_name(self.stem + "_sharp" + self.suffix)
+        unsharp = f"{radius:.1f}x{sigma:.1f}+\
+        {percent/100:.2f}+{threshold/100:.2f}"
+#        print ("unsharp mask:", unsharp)
+        cmd = f"{MAGICK_EXE} -unsharp {unsharp} {self} {out_fp}"
+        r = run(cmd, shell=True)
+        out_image = ImageFile(out_fp)
+        # write unsharp mask settings to XMP description
+        out_image.write_xmp_description("USM_" + unsharp)
+        out_image.write_iptc_keyword("sharp")    # add tag
+        logging.info("...done: {self.name} ")
+        return r
+
+    def crop(self, geometry, out_fp):
+        opt = r' -copy all -perfect -crop {0} "{1}" "{2}" '.format(
+            geometry, self, out_fp)
+    #    verbose = " -verbose"
+        cmd = JPEGTRAN_EXE + opt  # + verbose
+        p = run(cmd, shell=True)
+        return p
+
+    def rotate(self, angle):
+        assert(angle % 90 == 0)
+        logging.info(f"rotate  {self}...")
+#        perfect = "-perfect"
+        if self.format() == "JPEG":
+            assert(angle in [90, 180, 270])
+            perfect = ""
+            cmd = f'{JPEGTRAN_EXE} -copy all {perfect} \
+            -rotate {angle} -outfile "{self}" "{self}" '
+            run(cmd, shell=True)
+        else:
+            Image.open(self).rotate(-angle).save(self)  # counterclockwise
+        logging.info(f"...rotated: {self.name}")
+
+    def get_exif(self):
+        with Image.open(self) as img:
+            img.verify()
+            exif = img._getexif()
+        return exif
+
+    def resize(self, width, trash=False, quality=80):
+        logging.info(f"resize {self}...")
+        bak_fp = self.with_suffix(f"{self.suffix}0")
+        self.rename(bak_fp)
+        with Image.open(bak_fp) as img:
+            if img.size[0] > width or img.size[1] > width:
+                img.thumbnail((width, width))
+                img.save(self, quality=quality)
+                logging.info(f"...done: {self.name} ")
+                if trash:
+                    to_trash(bak_fp)
+            else:
+                logging.info(f"...image smaller than {width} px: {self.name} ")
+                bak_fp.rename(self)
+
+        return
+
+    def to_trash(self):
+        to_trash(self)
+
+
 # NUMPY TOOLS ====================================================
+
 
 def im_rotate(y, angle=90):
     ''' rotate array by 90 degrees, k = number of rotations  '''

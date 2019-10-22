@@ -4,6 +4,7 @@ from qq import npimage
 from qq import npfilters
 from qq import ostools
 from qq import misc
+from qq import terminaltools
 
 
 # if somebody does "from qq import *", this is what they will
