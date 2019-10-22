@@ -1,2 +1,7 @@
 send2trash
 pillow
+numpngw
+numpy
+matplotlib
+imageio
+scikit-image
