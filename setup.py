@@ -15,7 +15,7 @@ import sys
     
 setup(
     name='qq',
-    version=1.0.0,
+    version='1.0.0',
     url='https://github.com/ffsedd/qq/',
     author='ffsedd',
     author_email='ffsedd@gmail.com',
