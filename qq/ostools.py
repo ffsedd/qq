@@ -74,30 +74,34 @@ def __copyfileobj(fsrc, fdst, callback, total, length=16*1024):
 # ==========================================
 
 
-def copy3(src, dst):
-    ''' copy, skip if exists, check size '''
 
-    from time import sleep
-    import os
-    from pathlib import Path
-#    from shutil import copy2
+
+
+def copy3(src, dst, trash_src=False, copy_func=copy2):
+    ''' copy, skip if exists, check size '''
+    from filecmp import cmp
+
+#    copyfunc = copy_with_progress if show_progress else copy2
 
     logging.debug(f'copy3 {src} -> {dst}')
 
     src, dst = Path(src), Path(dst)
 
     if not dst.exists():
-        copy_pro(src, dst)
-    else:
-        raise IOError(f"File already exists {dst}")
+        copy_func(src,dst)
 
-    sleep(.3)
+    # sleep(.3)
 
-    if os.path.getsize(src) != os.path.getsize(dst):
-        raise IOError(f'Error, copy failed {src} -> {dst}')
-    else:
-        logging.debug(f'...ok, files have same size')
+#    if os.path.getsize(src) != os.path.getsize(dst):
+#        raise Exception(f'Error, copy failed {src} > {dst}')
+    assert cmp(src, dst, shallow=True), f'Error, copy failed {src} > {dst}'
 
+#    else:
+#        logging.debug(f'...ok')
+
+    if trash_src:
+        logging.debug(f'...send2trash {src}')
+        send2trash(str(src))
 
 def set_readonly(fpath):
     import os
@@ -175,6 +179,12 @@ def make_temp_dir(name="pytemp"):
     dp = Path(tempfile.gettempdir(), name)
     dp.mkdir(parents=True, exist_ok=True)
     return dp
+
+
+def connect_win_network_drive(networkPath, user=None, password=None, drive_letter=None, persistent="no"):
+    winCMD = f'NET USE {drive_letter} {networkPath} /User:{user} {password} /persistent:{persistent}'
+    res = run(winCMD, stdout=PIPE, shell=True)
+    print(res)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,14 @@ def debug_it(func):
     return wrapper
 
 
+# doesn't work when imported, must be copied
+def ensure_single_instance():
+    # ensure single instance
+    from tendo import singleton; me = singleton.SingleInstance() 
+
+
+
+
 class Script():
 
     def __init__(self, quiet=True, verbose=False, loglevel=20, filepath=None,
@@ -54,6 +62,7 @@ class Script():
             logging.basicConfig(level=loglevel,
                                 format=format)
 
+    
     def end(self):
         runtime = round(time.time() - self.start_time, 2)
         print(
@@ -110,11 +119,12 @@ class Config(UserDict):
         try:
             with open(self.fpath) as f:
                 cfg = json.load(f)
-                super(Config, self).__init__(cfg)
+                self.update(cfg)
+                # super(Config, self).__init__(cfg)
                 logging.debug(f"{self.fpath} json config loaded {self}")
         except Exception as e:
             print(e)
-            self.save()  # if load failed, create new config file
+        self.save()  # save updated config
 
     def save(self, fpath=None):
         ''' save config dict to json file '''
@@ -123,9 +133,11 @@ class Config(UserDict):
         # save config to unicode json file
         if fpath:
             self.fpath = fpath
-
+        if len(self) == 0:
+            logging.debug(f"config empty, save skipped....")
+            return
         with io.open(self.fpath, 'w', encoding='utf8') as f:
-            json.dump(self, f, indent=4, sort_keys=True, ensure_ascii=False)
+            json.dump(dict(self), f, indent=4, sort_keys=True, ensure_ascii=False)
         logging.debug(f"{self.fpath} json config saved {self}")
 
     def reset(self):
@@ -139,7 +151,9 @@ def main():
     print("library - import qq")
     logging.basicConfig(
         level=10, format='!%(levelno)s [%(module)10s%(lineno)4d]\t%(message)s')
-
+    c = Config("config.json",{"test":2})
+    print(type(c))
+    c.save()
 
 if __name__ == '__main__':
     main()

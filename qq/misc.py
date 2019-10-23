@@ -280,12 +280,6 @@ def is_process_running(process_id):
         return False
 
 
-def ensure_single_instance():
-    ''' will sys.exit(-1) if other instance is running '''
-    from tendo import singleton  # pip install tendo
-    singleton.SingleInstance()
-
-
 # ---------------- TIME -------------------------------
 def datestamp():
     return datetime.datetime.now().strftime("%y%m%d")
