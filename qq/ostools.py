@@ -3,6 +3,7 @@
 import os
 import shutil
 import logging
+from shutil import copy2
 from filecmp import cmp
 from qq.terminaltools import print_copy_progress
 from pathlib import Path
