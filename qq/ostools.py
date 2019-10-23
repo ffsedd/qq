@@ -3,6 +3,7 @@
 import os
 import shutil
 import logging
+from subprocess import run, PIPE
 from shutil import copy2
 from filecmp import cmp
 from qq.terminaltools import print_copy_progress
@@ -102,7 +103,7 @@ def copy3(src, dst, trash_src=False, copy_func=copy2):
 
     if trash_src:
         logging.debug(f'...send2trash {src}')
-        send2trash(str(src))
+        to_trash(src)
 
 def set_readonly(fpath):
     import os
