@@ -189,6 +189,11 @@ class npImage():
             bitdepth:{self.bitdepth} "
         print(out)
         return out
+    def show(self):
+        import matplotlib.pyplot as plt
+        plt.imshow(self.arr)
+        plt.show()
+
 
     @property
     def stats(self):
@@ -313,7 +318,7 @@ class ImageFile(File):
             self.with_name(self.stem + '-thumb' + self.suffix)
         cmd = f'{MAGICK_EXE} "{self}" -quality 70 \
         -thumbnail {size}x{size} "{temp_fp}" '
-        o = run(cmd, shell=True, verbose=False)
+        o = run(cmd, shell=True)
         if not temp_fp.is_file():
             logging.critical(
                 "thumbnail not created, exit, code: {} \n {}".format(o, cmd))

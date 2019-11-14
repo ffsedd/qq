@@ -184,6 +184,7 @@ def make_temp_dir(name="pytemp"):
 
 
 def connect_win_network_drive(networkPath, user=None, password=None, drive_letter=None, persistent="no"):
+    networkPath = str(networkPath).rstrip("\\")
     winCMD = f'NET USE {drive_letter} {networkPath} /User:{user} {password} /persistent:{persistent}'
     res = run(winCMD, stdout=PIPE, shell=True)
     print(res)
