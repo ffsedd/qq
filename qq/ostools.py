@@ -190,6 +190,39 @@ def connect_win_network_drive(networkPath, user=None, password=None, drive_lette
     print(res)
 
 
+
+def make_symlinks(src, dest, dry=False):
+    ''' get all files and folders in source dir
+    and create symlinks in destination '''
+
+    Ps = Path(src).iterdir()
+
+    for P in Ps:
+        make_symlink(P, dest, dry=dry)
+
+
+def make_symlink(src, dest, dry=False):
+
+    F = Path(src).resolve()
+    print(F)
+    try:
+        F1 = dest.joinpath(F.name)
+        print(f"try to remove {F1}")
+        if F1.is_file() and not dry:
+            F1.unlink()
+        elif F1.is_dir() and not dry:
+            shutil.rmtree(F1)
+    except:
+        pass
+    cmd = f'ln -s -v -f {F.resolve()} {dest}'
+    print(cmd)
+    if not dry:
+            run(cmd,shell=True)
+
+
+
+
+
 if __name__ == "__main__":
 
     logging.basicConfig(level=10,
