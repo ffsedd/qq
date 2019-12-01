@@ -113,12 +113,15 @@ def set_readonly(fpath):
 
 def to_trash(fp):
     import send2trash
-    o = send2trash.send2trash(str(fp))
-    if o:
-        logging.info(o)
-    else:
-        logging.info(f'trashed... {fp}')
-
+    try:
+        o = send2trash.send2trash(str(fp))
+        if o:
+            logging.info(o)
+        else:
+            logging.info(f'trashed... {fp}')
+    except OSError as e:
+        print(f"send2trash failed {e}")
+        os.remove(fp)
 
 def safe_move(src, dst):
     # MOVE DIR
