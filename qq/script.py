@@ -37,7 +37,7 @@ def debug_it(func):
 # doesn't work when imported, must be copied
 def ensure_single_instance():
     # ensure single instance
-    from tendo import singleton; me = singleton.SingleInstance() 
+    from tendo import singleton; me = singleton.SingleInstance()
 
 
 
@@ -62,7 +62,7 @@ class Script():
             logging.basicConfig(level=loglevel,
                                 format=format)
 
-    
+
     def end(self):
         runtime = round(time.time() - self.start_time, 2)
         print(
@@ -144,6 +144,71 @@ class Config(UserDict):
         ''' reset config dict to default values '''
         super(Config, self).__init__(self.default.copy())
 
+
+class ConfigObj(dict):
+    ''' Config object:
+        load - load from json
+        save - save to json
+        reset - reset to value of default dict
+        '''
+
+    def __init__(self, fpath=None, default={}):
+        ''' create config, pass defalut value or filepath to load '''
+        super(ConfigObj, self).__init__(default)
+        self.default = dict(default)
+        self.fpath = fpath
+        if fpath:
+            self.load()
+
+    def load(self, fpath=None):
+        ''' load config dict from json file '''
+        import json
+        if fpath:
+            self.fpath = fpath
+        try:
+            with open(self.fpath) as f:
+                cfg = json.load(f)
+                self.update(cfg)
+                logging.debug(f"{self.fpath} json config loaded {self}")
+        except Exception as e:
+            print(e)
+        self.save()  # save updated config
+
+    def save(self, fpath=None):
+        ''' save config dict to json file '''
+        import io
+        import json
+        # save config to unicode json file
+        if fpath:
+            self.fpath = fpath
+        if len(self) == 0:
+            logging.debug(f"config empty, save skipped....")
+            return
+        with io.open(self.fpath, 'w', encoding='utf8') as f:
+            json.dump(dict(self), f, indent=4, sort_keys=True, ensure_ascii=False)
+        logging.debug(f"{self.fpath} json config saved {self}")
+
+    def reset(self):
+        ''' reset config dict to default values '''
+        self = self.default.copy()
+
+    def __getattr__(self, name):
+        if name in self:
+            return self[name]
+        else:
+            raise AttributeError("No such attribute: " + name)
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+    def __delattr__(self, name):
+        if name in self:
+            del self[name]
+        else:
+            raise AttributeError("No such attribute: " + name)
+
+
+
 # ---------------- MAIN -------------------------------
 
 
@@ -151,9 +216,14 @@ def main():
     print("library - import qq")
     logging.basicConfig(
         level=10, format='!%(levelno)s [%(module)10s%(lineno)4d]\t%(message)s')
-    c = Config("config.json",{"test":2})
+    # ~ c = Config("config.json",{"test":2})
+    # ~ print(type(c))
+    # ~ print(c.__dict__)
+    # ~ c.save()
+    c = ConfigObj("config.json",{"test":2})
     print(type(c))
+    # ~ print(c.__dict__)
     c.save()
-
+    print(c.test,c.default,c.fpath)
 if __name__ == '__main__':
     main()

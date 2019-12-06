@@ -1,3 +1,7 @@
 {
+    "default": {
+        "test": 2
+    },
+    "fpath": "config.json",
     "test": 2
 }
