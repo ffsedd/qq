@@ -515,7 +515,7 @@ def save_image(im, fp_out, bitdepth=None):
     # numpy image
     elif isinstance(im, np.ndarray):
         if fp.suffix.lower in [".jpg",".jpeg"]:
-            numpy_to_jpg(im, fp):
+            numpy_to_jpg(im, fp)
             
         if not bitdepth:
             if im.dtype in (np.uint8, "uint8"):
