@@ -523,12 +523,13 @@ def save_image(im, fp_out, bitdepth=None):
             numpy_to_jpg(im, fp)
             
         # PNG 
-        else:   
+        else:
+            logging.debug(f"save png {im.shape}, {fp.name}, {bitdepth}")
             if not bitdepth:
                 bitdepth = 8 if im.dtype in (np.uint8, "uint8") else 16
 
             assert bitdepth in [8,16], f"unsupported bitdepth {bitdepth}"        
-            logging.debug(f"save png {im.shape}, {fp.name}, {bitdepth}")
+            logging.debug(f"save png2 {im.shape}, {fp.name}, {bitdepth}")
             numpy_to_png(im, fp,  bitdepth=bitdepth)
         
     else:
