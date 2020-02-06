@@ -516,16 +516,15 @@ def save_image(im, fp_out, bitdepth=None):
     elif isinstance(im, np.ndarray):
         print(fp.suffix.lower())
         if fp.suffix.lower() in [".jpg",".jpeg"]:
-            
+            # JPG
             numpy_to_jpg(im, fp)
-            
-        if not bitdepth:
+        # PNG    
+        elif not bitdepth:
             if im.dtype in (np.uint8, "uint8"):
                 bitdepth = 8
             else:  # 16bit PNG - default output
                 bitdepth = 16
-
-        numpy_to_png(im, fp,  bitdepth=bitdepth)
+            numpy_to_png(im, fp,  bitdepth=bitdepth)
         
     else:
         raise Exception(f"unsupported image type {type(im)}")
