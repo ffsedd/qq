@@ -500,9 +500,13 @@ def load_image(fp):
 
 
 def save_image(im, fp_out, bitdepth=None):
+    ''' 
+    PIL image - save by PIL as 8bit jpg or png
+    numpy image - save as jpg, 8bit png or 16bit png
+    '''
+    
     from PIL import Image
-    ''' float or uint16 numpy array --> 16 bit png
-        uint8 numpy array --> 8bit png '''
+
 
     logging.info(f"saving image {fp_out}")
     fp = Path(fp_out)
@@ -518,13 +522,14 @@ def save_image(im, fp_out, bitdepth=None):
         if fp.suffix.lower() in [".jpg",".jpeg"]:
             # JPG
             numpy_to_jpg(im, fp)
+            return
         # PNG    
-        elif not bitdepth:
-            if im.dtype in (np.uint8, "uint8"):
-                bitdepth = 8
-            else:  # 16bit PNG - default output
-                bitdepth = 16
-            numpy_to_png(im, fp,  bitdepth=bitdepth)
+        if not bitdepth:
+            bitdepth = 8 if im.dtype in (np.uint8, "uint8") else 16
+
+        assert bitdepth in [8,16], f"unsupported bitdepth {bitdepth}"        
+        
+        numpy_to_png(im, fp,  bitdepth=bitdepth)
         
     else:
         raise Exception(f"unsupported image type {type(im)}")
