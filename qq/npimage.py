@@ -465,12 +465,20 @@ def numpy_to_png(im, fp_out,  bitdepth=8):
     from numpngw import write_png
     assert isinstance(im, (np.ndarray, np.generic))
     # ensure extenion
+    
     Fp = Path(fp_out).with_suffix(".png")
-
     logging.info(f"saving array to png..{Fp}")
     # Image.fromarray(img_as_ubyte(im)).save(fp_out)
+
+    if bitdepth == 8:
+        im = img_as_ubyte(im) 
+    elif bitdepth == 16:    
+        im = img_as_uint(im)  # accept float
+    else:
+        raise Exception(f"unupported bitdepth {bitdepth}")   
+        
     write_png(Fp, im, bitdepth=bitdepth)
-    logging.info("...saved")
+    logging.debug(f"...saved: {fp_out}")
 
 
 def numpy_to_jpg(im, fp_out):
@@ -483,7 +491,7 @@ def numpy_to_jpg(im, fp_out):
 
     # use matplotlib
     plt.imsave(Fp.with_suffix(".jpg"), im, cmap=cmap, vmin=0, vmax=1)
-    logging.info(f"...saved: {fp_out}")
+    logging.debug(f"...saved: {fp_out}")
 
 
 def load_image(fp):
@@ -497,17 +505,25 @@ def save_image(im, fp_out, bitdepth=None):
         uint8 numpy array --> 8bit png '''
 
     logging.info(f"saving image {fp_out}")
-    Path(fp_out).parent.mkdir(exist_ok=True)
-
+    fp = Path(fp_out)
+    fp.parent.mkdir(exist_ok=True)
+    
+    # PIL image
     if isinstance(im, Image.Image):
-        im.save(fp_out)  # PIL save
-
+        im.save(fp) 
+    
+    # numpy image
     elif isinstance(im, np.ndarray):
-        if bitdepth == 8:
-            im = img_as_ubyte(im)
-        if im.dtype in (np.uint8, "uint8"):
-            numpy_to_png(im, fp_out)
-        else:  # 16bit PNG - default output
-            im = img_as_uint(im)  # accept float
-            numpy_to_png(im, fp_out,  bitdepth=16)
-    logging.info(f"image saved")
+        if fp.suffix.lower in [".jpg",".jpeg"]:
+            numpy_to_jpg(im, fp):
+            
+        if not bitdepth:
+            if im.dtype in (np.uint8, "uint8"):
+                bitdepth = 8
+            else:  # 16bit PNG - default output
+                bitdepth = 16
+
+        numpy_to_png(im, fp,  bitdepth=bitdepth)
+        
+    else:
+        raise Exception(f"unsupported image type {type(im)}")
