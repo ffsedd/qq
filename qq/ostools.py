@@ -25,9 +25,12 @@ def copy_pro(src, dst, *, follow_symlinks=True,
     If follow_symlinks is not set and src is a symbolic link, a new
     symlink will be created instead of copying the file it points to.
     """
-    # dst is dir? - copy into it
-    if os.path.isdir(dst):
-        dst = os.path.join(dst, os.path.basename(src))
+    src = Path(src)
+    dst = Path(dst)
+    
+    # file/dir -> dir 
+    if dst.is_dir():
+        dst = dst / src.name
 
     # same file error?
     if shutil._samefile(src, dst):
@@ -35,8 +38,11 @@ def copy_pro(src, dst, *, follow_symlinks=True,
                                    .format(src, dst))
 
     # destination exists error?
-    if not force and os.path.exists(dst):
-        raise IOError(f"destination exists: {dst}")
+    if dst.exists():
+        if force:
+            dst.unlink()
+        else:    
+            raise IOError(f"copy failed, destination already exists: {dst}, use force=True to overwrite")
 
     size = os.stat(src).st_size
 
@@ -47,8 +53,8 @@ def copy_pro(src, dst, *, follow_symlinks=True,
     else:
         # file copy
         callback = print_copy_progress if size > progress_min_size else None
-        with open(src, 'rb') as fsrc:
-            with open(dst, 'wb') as fdst:
+        with src.open(mode='rb') as fsrc:
+            with dst.open(mode='wb+') as fdst:  # open or create
                 __copyfileobj(fsrc, fdst, callback=callback, total=size)
 
     # copy permissions
@@ -112,16 +118,13 @@ def set_readonly(fpath):
 
 
 def to_trash(fp):
-    try:
-        import send2trash
-        o = send2trash.send2trash(str(fp))
-        if o:
-            logging.info(o)
-        else:
-            logging.info(f'trashed... {fp}')
-    except Exception as e:
-        print(f"send2trash failed {e}")
-        os.remove(fp)
+    import send2trash
+    o = send2trash.send2trash(str(fp))
+    if o:
+        logging.info(o)
+    else:
+        logging.info(f'trashed... {fp}')
+
 
 def safe_move(src, dst):
     # MOVE DIR
@@ -187,43 +190,11 @@ def make_temp_dir(name="pytemp"):
 
 
 def connect_win_network_drive(networkPath, user=None, password=None, drive_letter=None, persistent="no"):
-    networkPath = str(networkPath).strip("\\")
+    networkPath = str(networkPath).replace("/","\\").strip("\\").strip("\\")
     winCMD = f'NET USE {drive_letter} \\\\{networkPath} /User:{user} {password} /persistent:{persistent}'
+    print(winCMD)
     res = run(winCMD, stdout=PIPE, shell=True)
     print(res)
-
-
-
-def make_symlinks(src, dest, dry=False):
-    ''' get all files and folders in source dir
-    and create symlinks in destination '''
-
-    Ps = Path(src).iterdir()
-
-    for P in Ps:
-        make_symlink(P, dest, dry=dry)
-
-
-def make_symlink(src, dest, dry=False):
-
-    F = Path(src).resolve()
-    print(F)
-    try:
-        F1 = dest.joinpath(F.name)
-        print(f"try to remove {F1}")
-        if F1.is_file() and not dry:
-            F1.unlink()
-        elif F1.is_dir() and not dry:
-            shutil.rmtree(F1)
-    except:
-        pass
-    cmd = f'ln -s -v -f {F.resolve()} {dest}'
-    print(cmd)
-    if not dry:
-            run(cmd,shell=True)
-
-
-
 
 
 if __name__ == "__main__":
