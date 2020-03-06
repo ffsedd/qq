@@ -6,7 +6,8 @@ from pathlib import Path
 from send2trash import send2trash
 from tkinter import filedialog
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
-from skimage import img_as_float, img_as_ubyte, img_as_uint
+# from skimage import img_as_float, img_as_ubyte, img_as_uint
+from qq.skimage_dtype import img_as_float, img_as_ubyte, img_as_uint
 from imageio import imread, imwrite
 from qq.nptools import normalize, info
 from qq.ostools import to_trash
